@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocuMind - 개인정보처리방침</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; line-height: 1.8; color: #333; }
+  h1 { color: #4f46e5; border-bottom: 2px solid #4f46e5; padding-bottom: 10px; }
+  h2 { color: #374151; margin-top: 30px; }
+  .date { color: #6b7280; font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>DocuMind 개인정보처리방침</h1>
+<p class="date">시행일: 2026년 3월 13일</p>
+
+<h2>1. 개요</h2>
+<p>DocuMind는 AI 기반 문서 관리 데스크톱 애플리케이션입니다. 본 방침은 DocuMind가 사용자 정보를 어떻게 처리하는지 설명합니다.</p>
+
+<h2>2. 수집하는 정보</h2>
+<p>DocuMind는 <strong>서버를 운영하지 않으며</strong>, 사용자 데이터를 외부로 전송하거나 수집하지 않습니다.</p>
+<ul>
+  <li><strong>문서 데이터</strong>: 모든 문서는 사용자의 로컬 디스크에만 저장됩니다.</li>
+  <li><strong>API 키</strong>: 사용자가 직접 입력한 AI 서비스 API 키는 OS Keychain(Windows Credential Store)에 암호화되어 저장되며, 외부로 전송되지 않습니다.</li>
+  <li><strong>Google Drive 연동</strong>: 사용자가 직접 생성한 OAuth 자격증명을 사용하며, DocuMind 개발자는 사용자의 Google 계정에 접근할 수 없습니다.</li>
+</ul>
+
+<h2>3. 제3자 서비스</h2>
+<p>DocuMind는 사용자가 직접 설정한 경우에만 다음 서비스와 통신합니다:</p>
+<ul>
+  <li><strong>AI API</strong> (OpenAI, Anthropic, Google AI): 문서 생성 및 분류를 위해 사용자가 입력한 API 키로 요청을 전송합니다.</li>
+  <li><strong>Google Drive API</strong>: 사용자가 직접 OAuth 인증한 경우에만 파일 가져오기/내보내기에 사용됩니다.</li>
+</ul>
+<p>각 서비스의 데이터 처리는 해당 서비스 제공자의 개인정보처리방침을 따릅니다.</p>
+
+<h2>4. 데이터 저장</h2>
+<ul>
+  <li>모든 데이터는 사용자의 로컬 컴퓨터에만 저장됩니다.</li>
+  <li>앱 삭제 시 모든 데이터를 함께 삭제할 수 있습니다.</li>
+  <li>백업/복원 기능은 로컬 파일로만 동작합니다.</li>
+</ul>
+
+<h2>5. 분석 및 추적</h2>
+<p>DocuMind는 사용자 행동 분석, 추적, 원격 측정(telemetry)을 일체 수행하지 않습니다.</p>
+
+<h2>6. 문의</h2>
+<p>개인정보 관련 문의: <a href="https://github.com/rirang1123/documind/issues">GitHub Issues</a></p>
+
+<h2>7. 변경사항</h2>
+<p>본 방침이 변경될 경우 이 페이지를 통해 공지합니다.</p>
+</body>
+</html>
