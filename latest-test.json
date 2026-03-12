@@ -1,1 +1,11 @@
-{"version":"0.0.0","platforms":{}}
+{
+  "version": "0.6.1",
+  "notes": "DocuMind-Test test-v0.6.1 release",
+  "pub_date": "2026-03-12T14:45:44Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUZ2ZmNk1tZG5aSmVCcWVUS2JjZENkNFo5YzdNSlF1VXJESndtRkJpWkFDOEc5Rm8wTi9mOVJZSWFLL2V4RS9HMGJRNXY4Vy9QWUN1TEpIaHB3KzJwK2lWQWxWR1hJbXdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzczMzI2NzM5CWZpbGU6RG9jdU1pbmQtVGVzdF8wLjYuMV94NjQtc2V0dXAuZXhlCjhIK0c1UUZyNTY4dWpSc0dac093WElTdHhFbGc2V2xEL1NwZGhGajVpMktFV1BJMWZsSzJWZFNqTEZWREJzSEhGNFM3cDJDNStLTUIvUXlhWmpZMENnPT0K",
+      "url": "https://github.com/rirang1123/documind/releases/download/test-v0.6.1/DocuMind-Test_0.6.1_x64-setup.exe"
+    }
+  }
+}
