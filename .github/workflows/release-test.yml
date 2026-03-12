@@ -52,7 +52,9 @@ jobs:
         run: |
           $tag = "${{ github.ref_name }}"
           $version = $tag -replace '^test-v', ''
-          $bundleDir = "src-tauri/target/release/bundle"
+          $bundleDir = Join-Path $env:GITHUB_WORKSPACE "src-tauri" "target" "release" "bundle"
+
+          Write-Host "Looking for .sig files in: $bundleDir"
 
           # Find all .sig files
           $sigFiles = Get-ChildItem -Path $bundleDir -Recurse -Filter "*.sig"
