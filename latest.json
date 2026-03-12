@@ -1,1 +1,11 @@
-{"version":"0.0.0","platforms":{}}
+{
+  "version": "0.6.0",
+  "notes": "DocuMind v0.6.0 release",
+  "pub_date": "2026-03-12T14:56:37Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUZ2ZmNk1tZG5aSlRyMGZqMW12NXJ2eXMxaEhJQ2VjRXMrUlQ0c1VkV21CSGdvNllYYUJ4VGdoaEhWbjUzUFVMcExmY0pvWDFjNCtxbmNEd2VBTHlPeGJnM2FTZzZ1c0FNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzczMzI3MzkxCWZpbGU6RG9jdU1pbmRfMC42LjBfeDY0LXNldHVwLmV4ZQp4TDNLbEk2VVBwNTdnam5qV0d4N212TmF0MGprZDhwUENmTjZsU1RYcnZ5MFJ2UVdWTEY1aVBFMTZDTzlxN05Xb2UvRjJQV0kzMGVUZW5pNHdVQ1hCZz09Cg==",
+      "url": "https://github.com/rirang1123/documind/releases/download/v0.6.0/DocuMind_0.6.0_x64-setup.exe"
+    }
+  }
+}
