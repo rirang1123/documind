@@ -30,85 +30,93 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build and release (test config)
-        id: tauri-build
-        uses: tauri-apps/tauri-action@v0
+      - name: Build Tauri app (test config)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: DocuMind-Test ${{ github.ref_name }}
-          releaseDraft: false
-          prerelease: true
-          includeUpdaterJson: false
-          args: --config src-tauri/tauri.test.conf.json
+        run: npm run tauri -- build --config src-tauri/tauri.test.conf.json
 
-      - name: Upload signatures and generate latest.json
+      - name: Create release and upload artifacts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: pwsh
+        shell: bash
         run: |
-          $tag = "${{ github.ref_name }}"
-          $version = $tag -replace '^test-v', ''
-          $bundleDir = Join-Path $env:GITHUB_WORKSPACE "src-tauri" "target" "release" "bundle"
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#test-v}"
+          BUNDLE_DIR="src-tauri/target/release/bundle"
 
-          Write-Host "Looking for .sig files in: $bundleDir"
+          echo "=== Listing bundle directory ==="
+          find "$BUNDLE_DIR" -type f | head -30
 
-          # Find all .sig files
-          $sigFiles = Get-ChildItem -Path $bundleDir -Recurse -Filter "*.sig"
-          Write-Host "Found signature files:"
-          $sigFiles | ForEach-Object { Write-Host "  $_" }
+          echo ""
+          echo "=== Looking for .sig files ==="
+          SIG_FILES=$(find "$BUNDLE_DIR" -name "*.sig" -type f)
+          echo "$SIG_FILES"
 
-          if ($sigFiles.Count -eq 0) {
-            Write-Host "::error::No .sig files found. Signing may have failed."
+          if [ -z "$SIG_FILES" ]; then
+            echo "::error::No .sig files found"
             exit 1
-          }
+          fi
 
-          # Upload .sig files to the release
-          foreach ($sig in $sigFiles) {
-            Write-Host "Uploading $($sig.Name)..."
-            gh release upload $tag $sig.FullName --repo ${{ github.repository }} --clobber
-          }
+          # Find installer files
+          NSIS_EXE=$(find "$BUNDLE_DIR/nsis" -name "*-setup.exe" ! -name "*.sig" | head -1)
+          NSIS_SIG=$(find "$BUNDLE_DIR/nsis" -name "*-setup.exe.sig" | head -1)
+          MSI_FILE=$(find "$BUNDLE_DIR/msi" -name "*.msi" ! -name "*.sig" | head -1)
 
-          # Read signature content for NSIS installer
-          $nsisSetupSig = $sigFiles | Where-Object { $_.Name -match "setup\.exe\.sig$" } | Select-Object -First 1
-          $nsisSig = ""
-          if ($nsisSetupSig) {
-            $nsisSig = Get-Content $nsisSetupSig.FullName -Raw
-            $nsisSig = $nsisSig.Trim()
-          }
+          echo ""
+          echo "NSIS: $NSIS_EXE"
+          echo "NSIS sig: $NSIS_SIG"
+          echo "MSI: $MSI_FILE"
 
-          # Get download URLs from release assets
-          $releaseJson = gh release view $tag --repo ${{ github.repository }} --json assets | ConvertFrom-Json
-          $nsisUrl = ($releaseJson.assets | Where-Object { $_.name -match "setup\.exe$" }).url
+          # Create GitHub release (prerelease)
+          gh release create "$TAG" \
+            --repo ${{ github.repository }} \
+            --title "DocuMind-Test $TAG" \
+            --notes "DocuMind-Test $TAG release" \
+            --prerelease
 
-          # Build latest.json
-          $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          # Upload installers
+          [ -f "$NSIS_EXE" ] && gh release upload "$TAG" "$NSIS_EXE" --repo ${{ github.repository }}
+          [ -f "$MSI_FILE" ] && gh release upload "$TAG" "$MSI_FILE" --repo ${{ github.repository }}
 
-          $platforms = @{}
+          # Upload .sig files
+          for sig in $SIG_FILES; do
+            echo "Uploading $(basename $sig)..."
+            gh release upload "$TAG" "$sig" --repo ${{ github.repository }}
+          done
 
-          if ($nsisUrl -and $nsisSig) {
-            $platforms["windows-x86_64"] = @{
-              signature = $nsisSig
-              url = $nsisUrl
+          # Read NSIS signature
+          NSIS_SIG_CONTENT=""
+          if [ -f "$NSIS_SIG" ]; then
+            NSIS_SIG_CONTENT=$(cat "$NSIS_SIG" | tr -d '\n\r')
+          fi
+
+          # Get download URL for NSIS installer
+          NSIS_NAME=$(basename "$NSIS_EXE")
+          NSIS_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${NSIS_NAME}"
+
+          # Generate latest.json
+          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          cat > latest.json << ENDJSON
+          {
+            "version": "${VERSION}",
+            "notes": "DocuMind-Test ${TAG} release",
+            "pub_date": "${NOW}",
+            "platforms": {
+              "windows-x86_64": {
+                "signature": "${NSIS_SIG_CONTENT}",
+                "url": "${NSIS_URL}"
+              }
             }
           }
+          ENDJSON
 
-          $latestJson = @{
-            version = $version
-            notes = "DocuMind-Test $tag release"
-            pub_date = $now
-            platforms = $platforms
-          } | ConvertTo-Json -Depth 4
+          echo ""
+          echo "=== latest.json ==="
+          cat latest.json
 
-          Write-Host "latest.json content:"
-          Write-Host $latestJson
-
-          # Save and upload latest.json to this release
-          $latestJson | Out-File -FilePath "latest.json" -Encoding utf8NoBOM
-          gh release upload $tag "latest.json" --repo ${{ github.repository }} --clobber
+          gh release upload "$TAG" latest.json --repo ${{ github.repository }}
 
   update-manifest:
     needs: build-and-release
@@ -140,9 +148,7 @@ jobs:
           fi
 
           # Upload as latest-test.json (--clobber replaces existing)
-          gh release upload updater-manifest latest.json --repo ${{ github.repository }} --clobber
-          # Also upload as latest-test.json
-          mv latest.json latest-test.json
+          cp latest.json latest-test.json
           gh release upload updater-manifest latest-test.json --repo ${{ github.repository }} --clobber
 
           echo "Successfully uploaded latest-test.json to updater-manifest release"
