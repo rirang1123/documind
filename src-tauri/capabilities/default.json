@@ -22,11 +22,14 @@
     {
       "identifier": "fs:scope",
       "allow": [
+        { "path": "$HOME/**" },
         { "path": "$DOCUMENT/**" },
         { "path": "$DESKTOP/**" },
         { "path": "$DOWNLOAD/**" },
         { "path": "$APPDATA/**" },
-        { "path": "$LOCALAPPDATA/**" }
+        { "path": "$LOCALAPPDATA/**" },
+        { "path": "$TEMP/**" },
+        { "path": "**" }
       ]
     }
   ]

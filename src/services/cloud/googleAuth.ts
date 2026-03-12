@@ -58,6 +58,12 @@ export async function startGoogleOAuth(
   clientId: string,
   providerId: string,
 ): Promise<GoogleAuthResult> {
+  // 0. Get client_secret from Keychain
+  const clientSecret = await keychain.getCloudClientSecret(providerId)
+  if (!clientSecret) {
+    throw new Error('Client Secret이 설정되지 않았습니다. 설정에서 Client Secret을 입력해주세요.')
+  }
+
   // 1. Generate PKCE
   const codeVerifier = generateCodeVerifier()
   const codeChallenge = await generateCodeChallenge(codeVerifier)
@@ -93,6 +99,7 @@ export async function startGoogleOAuth(
         code: result.code,
         redirect_uri: redirectUri,
         client_id: clientId,
+        client_secret: clientSecret,
         code_verifier: codeVerifier,
       }),
     })

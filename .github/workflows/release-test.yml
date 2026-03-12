@@ -1,9 +1,9 @@
-name: Release
+name: Release (Test)
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'test-v*'
 
 jobs:
   create-release:
@@ -21,9 +21,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref_name }}
-          release_name: DocuMind ${{ github.ref_name }}
+          release_name: DocuMind-Test ${{ github.ref_name }}
           draft: true
-          prerelease: false
+          prerelease: true
 
   build-tauri:
     needs: create-release
@@ -50,7 +50,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Tauri app
+      - name: Build Tauri app (test config)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -58,6 +58,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
+          args: --config src-tauri/tauri.test.conf.json
 
   publish-release:
     needs: [create-release, build-tauri]
@@ -82,7 +83,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Build and upload latest.json to updater-manifest release
+      - name: Build and upload latest-test.json to updater-manifest release
         uses: actions/github-script@v7
         with:
           script: |
@@ -93,7 +94,7 @@ jobs:
               release_id: ${{ needs.create-release.outputs.release_id }},
             })
 
-            const version = release.data.tag_name.replace('v', '')
+            const version = release.data.tag_name.replace('test-v', '')
             const notes = release.data.body || ''
             const pubDate = release.data.published_at
 
@@ -131,7 +132,6 @@ jobs:
             let manifestRelease = releases.find(r => r.tag_name === 'updater-manifest')
 
             if (!manifestRelease) {
-              // Create tag
               const { data: mainRef } = await github.rest.git.getRef({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -158,8 +158,8 @@ jobs:
               manifestRelease = created
             }
 
-            // 3. Upload latest.json (replace if exists)
-            const existing = manifestRelease.assets?.find(a => a.name === 'latest.json')
+            // 3. Upload latest-test.json (replace if exists)
+            const existing = manifestRelease.assets?.find(a => a.name === 'latest-test.json')
             if (existing) {
               await github.rest.repos.deleteReleaseAsset({
                 owner: context.repo.owner,
@@ -172,8 +172,8 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               release_id: manifestRelease.id,
-              name: 'latest.json',
+              name: 'latest-test.json',
               data: JSON.stringify(manifest, null, 2),
             })
 
-            core.info(`Uploaded latest.json v${version} to updater-manifest release`)
+            core.info(`Uploaded latest-test.json v${version} to updater-manifest release`)

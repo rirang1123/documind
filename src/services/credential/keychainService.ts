@@ -45,8 +45,18 @@ export const keychain = {
     await this.set(`cloud:${providerId}:refreshToken`, token)
   },
 
+  // Cloud Client Secret 헬퍼
+  async getCloudClientSecret(providerId: string): Promise<string | null> {
+    return this.get(`cloud:${providerId}:clientSecret`)
+  },
+
+  async setCloudClientSecret(providerId: string, secret: string): Promise<void> {
+    await this.set(`cloud:${providerId}:clientSecret`, secret)
+  },
+
   async deleteCloudTokens(providerId: string): Promise<void> {
     await this.delete(`cloud:${providerId}:accessToken`)
     await this.delete(`cloud:${providerId}:refreshToken`)
+    await this.delete(`cloud:${providerId}:clientSecret`)
   },
 }

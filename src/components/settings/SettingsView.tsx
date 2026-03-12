@@ -762,10 +762,20 @@ function GoogleDriveSetupGuide({
 }) {
   const [expandedStep, setExpandedStep] = useState<number>(provider?.clientId ? 0 : 1)
   const [clientId, setClientId] = useState(provider?.clientId || '')
+  const [clientSecret, setClientSecret] = useState('')
   const [saving, setSaving] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [connectError, setConnectError] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
+
+  // Load client secret from keychain on mount
+  useEffect(() => {
+    if (provider?.id) {
+      keychain.getCloudClientSecret(provider.id).then(s => {
+        if (s) setClientSecret(s)
+      })
+    }
+  }, [provider?.id])
 
   const isConnected = !!provider?.email
 
@@ -774,7 +784,7 @@ function GoogleDriveSetupGuide({
   }
 
   const handleSave = async () => {
-    if (!clientId.trim()) return
+    if (!clientId.trim() || !clientSecret.trim()) return
     setSaving(true)
     try {
       const data: CloudProvider = provider
@@ -786,6 +796,8 @@ function GoogleDriveSetupGuide({
             clientId: clientId.trim(),
             isActive: true,
           }
+      // Client Secret은 Keychain에 안전하게 저장
+      await keychain.setCloudClientSecret(data.id, clientSecret.trim())
       await onSave(data)
     } finally {
       setSaving(false)
@@ -909,8 +921,7 @@ function GoogleDriveSetupGuide({
             <li>애플리케이션 유형: "데스크톱 앱"을 선택합니다.</li>
             <li>이름을 입력합니다 (예: DocuMind).</li>
             <li>"만들기"를 클릭합니다.</li>
-            <li>표시된 "클라이언트 ID"를 복사하여 아래에 붙여넣습니다.</li>
-            <li>(Client Secret은 필요하지 않습니다 — PKCE 방식 사용)</li>
+            <li>표시된 "클라이언트 ID"와 "클라이언트 보안 비밀번호(Secret)"를 복사하여 아래에 붙여넣습니다.</li>
           </ol>
           <button
             onClick={() => window.open('https://console.cloud.google.com/apis/credentials', '_blank')}
@@ -958,17 +969,29 @@ function GoogleDriveSetupGuide({
         ))}
       </div>
 
-      {/* Client ID 입력 */}
-      <div className="border-t border-border pt-3 space-y-2">
-        <label className="text-xs font-medium">클라이언트 ID</label>
-        <Input
-          value={clientId}
-          onChange={(e) => setClientId(e.target.value)}
-          placeholder="xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
-          className="font-mono text-xs"
-        />
+      {/* Client ID + Secret 입력 */}
+      <div className="border-t border-border pt-3 space-y-3">
+        <div className="space-y-1">
+          <label className="text-xs font-medium">클라이언트 ID</label>
+          <Input
+            value={clientId}
+            onChange={(e) => setClientId(e.target.value)}
+            placeholder="xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
+            className="font-mono text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium">클라이언트 Secret</label>
+          <Input
+            type="password"
+            value={clientSecret}
+            onChange={(e) => setClientSecret(e.target.value)}
+            placeholder="GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxxxx"
+            className="font-mono text-xs"
+          />
+        </div>
         <p className="text-xs text-muted-foreground">
-          위 Step 4에서 발급받은 클라이언트 ID를 붙여넣으세요. Client Secret은 필요하지 않습니다.
+          위 Step 4에서 발급받은 클라이언트 ID와 Secret을 붙여넣으세요. Secret은 OS Keychain에 안전하게 저장됩니다.
         </p>
       </div>
 
@@ -977,7 +1000,7 @@ function GoogleDriveSetupGuide({
         <Button variant="outline" size="sm" onClick={onCancel}>
           취소
         </Button>
-        <Button size="sm" onClick={handleSave} disabled={!clientId.trim() || saving}>
+        <Button size="sm" onClick={handleSave} disabled={!clientId.trim() || !clientSecret.trim() || saving}>
           {saving ? '저장 중...' : '저장'}
         </Button>
       </div>

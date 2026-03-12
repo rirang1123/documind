@@ -13,6 +13,8 @@ import {
   Loader2,
   ArrowUpDown,
   Check,
+  FolderDown,
+  FolderUp,
 } from 'lucide-react'
 import { useAppStore } from '@/stores/useAppStore'
 import { Button } from '@/components/ui/button'
@@ -24,8 +26,10 @@ import { Dialog } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { createSubFolderOnDisk } from '@/services/document/exportService'
 import { smartClassify, ensureCategoryFolder, extractTextFromBinary } from '@/services/document/classifyService'
+import DriveImportDialog from '@/components/cloud/DriveImportDialog'
+import DriveExportDialog from '@/components/cloud/DriveExportDialog'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { readFile, readTextFile, stat, writeFile as tauriWriteFile, exists, mkdir } from '@tauri-apps/plugin-fs'
+import { readFile, readTextFile, stat, writeFile as tauriWriteFile, exists, mkdir, copyFile } from '@tauri-apps/plugin-fs'
 import { join } from '@tauri-apps/api/path'
 
 /** 분류 확인 대기 중인 파일 항목 */
@@ -104,6 +108,7 @@ export function FileBrowser() {
     openFileViewer,
     renameFile,
     moveFile,
+    settings,
   } = useAppStore()
 
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
@@ -130,6 +135,20 @@ export function FileBrowser() {
   // D4: 분류 확인 대기열
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([])
   const [showClassifyConfirm, setShowClassifyConfirm] = useState(false)
+
+  // D5: Cloud (Drive) 가져오기/내보내기
+  const [showDriveImport, setShowDriveImport] = useState(false)
+  const [showDriveExport, setShowDriveExport] = useState(false)
+  const [exportTarget, setExportTarget] = useState<{
+    files?: DocumentFile[]
+    folder?: { folder: FolderType; files: DocumentFile[] }
+  } | null>(null)
+
+  // 활성 클라우드 제공자 ID (Google Drive 연결됨일 때)
+  const activeCloudProvider = settings?.cloudProviders?.find(
+    (p) => p.id === settings.activeCloudProviderId && p.email
+  )
+  const cloudProviderId = activeCloudProvider?.id
 
   const project = projects.find((p) => p.id === selectedProjectId)
 
@@ -348,6 +367,9 @@ export function FileBrowser() {
             } else if (pf.content) {
               const { writeTextFile: wtf } = await import('@tauri-apps/plugin-fs')
               await wtf(targetPath, pf.content)
+            } else if (pf.sourcePath) {
+              // blobData/content가 없으면 원본 파일을 직접 복사
+              await copyFile(pf.sourcePath, targetPath)
             }
           }
           savedPath = targetPath
@@ -482,6 +504,12 @@ export function FileBrowser() {
             <Upload className="mr-1 h-3.5 w-3.5" />
             파일 추가
           </Button>
+          {cloudProviderId && (
+            <Button variant="outline" size="sm" onClick={() => setShowDriveImport(true)}>
+              <FolderDown className="mr-1 h-3.5 w-3.5" />
+              Drive 가져오기
+            </Button>
+          )}
         </div>
       </div>
 
@@ -550,6 +578,20 @@ export function FileBrowser() {
                   <span className="text-xs text-muted-foreground">
                     {FOLDER_CATEGORY_LABELS[folder.category]}
                   </span>
+                )}
+                {cloudProviderId && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const folderFiles = files.filter((f) => f.folderId === folder.id)
+                      setExportTarget({ folder: { folder, files: folderFiles } })
+                      setShowDriveExport(true)
+                    }}
+                    className="opacity-0 group-hover:opacity-100 cursor-pointer text-muted-foreground hover:text-primary"
+                    title="Drive로 내보내기"
+                  >
+                    <FolderUp className="h-3.5 w-3.5" />
+                  </button>
                 )}
                 <button
                   onClick={() => setDeleteTarget({ type: 'folder', id: folder.id, name: folder.name })}
@@ -628,6 +670,21 @@ export function FileBrowser() {
           >
             이동
           </button>
+          {cloudProviderId && (
+            <button
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors"
+              onClick={() => {
+                const f = files.find((fl) => fl.id === contextMenu.fileId)
+                if (f) {
+                  setExportTarget({ files: [f] })
+                  setShowDriveExport(true)
+                }
+                setContextMenu(null)
+              }}
+            >
+              Drive로 내보내기
+            </button>
+          )}
           <button
             className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors"
             onClick={() => {
@@ -764,6 +821,29 @@ export function FileBrowser() {
             setShowClassifyConfirm(false)
             setPendingFiles([])
           }}
+        />
+      )}
+
+      {/* Drive 가져오기 다이얼로그 (D5) */}
+      {cloudProviderId && (
+        <DriveImportDialog
+          open={showDriveImport}
+          onClose={() => setShowDriveImport(false)}
+          providerId={cloudProviderId}
+        />
+      )}
+
+      {/* Drive 내보내기 다이얼로그 (D5) */}
+      {cloudProviderId && exportTarget && (
+        <DriveExportDialog
+          open={showDriveExport}
+          onClose={() => {
+            setShowDriveExport(false)
+            setExportTarget(null)
+          }}
+          providerId={cloudProviderId}
+          exportFiles={exportTarget.files}
+          exportFolder={exportTarget.folder}
         />
       )}
     </div>

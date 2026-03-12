@@ -58,14 +58,21 @@ export class TokenManager {
       errorMessage = '토큰 갱신 실패. Google 계정을 다시 연결해주세요.'
     }
 
+    // Google Desktop OAuth requires client_secret for token refresh
+    const clientSecret = await keychain.getCloudClientSecret(providerId)
+    const bodyParams: Record<string, string> = {
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: provider.clientId,
+    }
+    if (clientSecret) {
+      bodyParams.client_secret = clientSecret
+    }
+
     const res = await fetch(tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-        client_id: provider.clientId,
-      }),
+      body: new URLSearchParams(bodyParams),
     })
 
     if (!res.ok) {
