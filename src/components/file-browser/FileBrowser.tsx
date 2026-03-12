@@ -286,7 +286,6 @@ export function FileBrowser() {
 
     let textContent = ''
     let content: string | undefined
-    let blobData: ArrayBuffer | undefined
     let fileSize = 0
 
     try {
@@ -304,15 +303,16 @@ export function FileBrowser() {
         console.error('텍스트 파일 읽기 실패:', err)
       }
     } else {
-      try {
-        const bytes = await readFile(filePath)
-        blobData = bytes.buffer as ArrayBuffer
-        fileSize = fileSize || bytes.byteLength
-        if (blobData && ['docx', 'xlsx', 'pptx'].includes(fileType)) {
-          textContent = await extractTextFromBinary(blobData, fileType)
+      // 분류용 텍스트만 추출, blobData는 보관하지 않음 (sourcePath로 copyFile 사용)
+      if (['docx', 'xlsx', 'pptx'].includes(fileType)) {
+        try {
+          const bytes = await readFile(filePath)
+          const buffer = bytes.buffer.slice(0) as ArrayBuffer // 복사본
+          fileSize = fileSize || bytes.byteLength
+          textContent = await extractTextFromBinary(buffer, fileType)
+        } catch (err) {
+          console.error('텍스트 추출 실패:', err)
         }
-      } catch (err) {
-        console.error('바이너리 파일 읽기 실패:', err)
       }
     }
 
@@ -327,55 +327,107 @@ export function FileBrowser() {
       selectedCategory: category,
       tags,
       content,
-      blobData,
       sourcePath: filePath,
     }
+  }
+
+  /** 유사 파일 그룹 감지: 파일명에서 날짜/버전/번호를 제외한 공통 패턴 추출 */
+  const detectFileGroup = (fileName: string): string | null => {
+    const nameOnly = fileName.replace(/\.[^.]+$/, '') // 확장자 제거
+    // 날짜 패턴 제거: 2024-03, 202403, 2024_03_01, 3월, Q1, 1분기 등
+    // 버전 패턴 제거: v1, v2.0, _v3, (2), _최종, _수정, _final
+    // 번호 패턴 제거: _01, _1, #1 등
+    const normalized = nameOnly
+      .replace(/\d{4}[-_.]?\d{1,2}[-_.]?\d{0,2}/g, '') // 날짜
+      .replace(/[_\-\s]*(v\d+(\.\d+)?|ver\d+)/gi, '')   // 버전
+      .replace(/[_\-\s]*(\d{1,2}월|Q[1-4]|\d분기|상반기|하반기)/g, '') // 기간
+      .replace(/[_\-\s]*(최종|수정|final|draft|rev\d*)/gi, '') // 상태
+      .replace(/[_\-\s]*\(\d+\)/g, '')                    // (1), (2) 등
+      .replace(/[_\-\s]*#?\d{1,3}$/g, '')                 // 끝 번호
+      .replace(/[_\-\s]+$/g, '')                           // 끝 구분자
+      .trim()
+    // 너무 짧으면 그룹핑 안 함 (2글자 이하)
+    if (normalized.length <= 2) return null
+    return normalized
   }
 
   /** 확인된 pending 파일들을 실제로 저장 */
   const commitPendingFiles = useCallback(async (filesToCommit: PendingFile[]) => {
     if (!selectedProjectId) return
 
+    const currentProject = projects.find((p) => p.id === selectedProjectId)
+    if (!currentProject?.path) {
+      console.error('[commitPendingFiles] 프로젝트 경로 없음:', selectedProjectId)
+      return
+    }
+
+    // 1) 파일 그룹핑 감지: 같은 카테고리 + 같은 패턴 → 2개 이상이면 그룹
+    const groupMap = new Map<string, PendingFile[]>()
+    for (const pf of filesToCommit) {
+      const groupKey = detectFileGroup(pf.fileName)
+      if (groupKey) {
+        const key = `${pf.selectedCategory}::${groupKey}`
+        if (!groupMap.has(key)) groupMap.set(key, [])
+        groupMap.get(key)!.push(pf)
+      }
+    }
+    // 2개 이상인 그룹만 유지
+    const activeGroups = new Map<string, string>() // pfId → groupFolderName
+    for (const [key, files] of groupMap) {
+      if (files.length >= 2) {
+        const groupName = key.split('::')[1]
+        for (const f of files) {
+          activeGroups.set(f.id, groupName)
+        }
+      }
+    }
+
+    // 2) 파일별 저장
     for (const pf of filesToCommit) {
       const category = pf.selectedCategory
-      const currentProject = projects.find((p) => p.id === selectedProjectId)
       const currentFolders = useAppStore.getState().folders
 
       const folderId = await ensureCategoryFolder(
         selectedProjectId,
-        currentProject?.path || '',
+        currentProject.path,
         category,
         currentFolders,
         addFolder,
       )
 
-      // 프로젝트 디스크 폴더에 파일 복사
+      // 디스크에 파일 복사
       let savedPath = pf.sourcePath || pf.fileName
-      if (currentProject?.path) {
-        try {
-          const categoryLabel = FOLDER_CATEGORY_LABELS[category]
-          const targetDir = await join(currentProject.path, categoryLabel)
-          if (!(await exists(targetDir))) {
-            await mkdir(targetDir, { recursive: true })
-          }
-          const safeName = pf.fileName.replace(/[<>:"/\\|?*]/g, '_')
-          const targetPath = await join(targetDir, safeName)
-          const shouldCopy = !pf.sourcePath || pf.sourcePath !== targetPath
-          if (shouldCopy) {
-            if (pf.blobData) {
-              await tauriWriteFile(targetPath, new Uint8Array(pf.blobData))
-            } else if (pf.content) {
-              const { writeTextFile: wtf } = await import('@tauri-apps/plugin-fs')
-              await wtf(targetPath, pf.content)
-            } else if (pf.sourcePath) {
-              // blobData/content가 없으면 원본 파일을 직접 복사
-              await copyFile(pf.sourcePath, targetPath)
-            }
-          }
-          savedPath = targetPath
-        } catch (err) {
-          console.error('디스크 파일 복사 실패:', err)
+      try {
+        const categoryLabel = FOLDER_CATEGORY_LABELS[category]
+        let targetDir = await join(currentProject.path, categoryLabel)
+
+        // 그룹 폴더가 있으면 하위 폴더 생성
+        const groupName = activeGroups.get(pf.id)
+        if (groupName) {
+          targetDir = await join(targetDir, groupName.replace(/[<>:"/\\|?*]/g, '_'))
         }
+
+        if (!(await exists(targetDir))) {
+          await mkdir(targetDir, { recursive: true })
+        }
+        const safeName = pf.fileName.replace(/[<>:"/\\|?*]/g, '_')
+        const targetPath = await join(targetDir, safeName)
+
+        // sourcePath가 있으면 copyFile 우선 (가장 안정적)
+        if (pf.sourcePath) {
+          if (pf.sourcePath !== targetPath) {
+            await copyFile(pf.sourcePath, targetPath)
+          }
+        } else if (pf.blobData) {
+          await tauriWriteFile(targetPath, new Uint8Array(pf.blobData))
+        } else if (pf.content) {
+          const { writeTextFile: wtf } = await import('@tauri-apps/plugin-fs')
+          await wtf(targetPath, pf.content)
+        }
+        savedPath = targetPath
+      } catch (err) {
+        console.error('[commitPendingFiles] 디스크 파일 복사 실패:', pf.fileName, err)
+        // 복사 실패해도 DB에는 sourcePath로 저장
       }
 
       const docFile: DocumentFile = {

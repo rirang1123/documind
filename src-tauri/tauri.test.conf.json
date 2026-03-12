@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegui/tauri-v2/refs/heads/main/core/tauri-config-schema/schema.json",
   "productName": "DocuMind-Test",
-  "version": "0.5.801",
+  "version": "0.5.901",
   "identifier": "com.documind.test",
   "app": {
     "windows": [
