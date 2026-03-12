@@ -1,0 +1,33 @@
+{
+  "identifier": "default",
+  "description": "Default capabilities for DocuMind",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "process:default",
+    "dialog:default",
+    "updater:default",
+    "fs:default",
+    "fs:allow-mkdir",
+    "fs:allow-read-dir",
+    "fs:allow-exists",
+    "fs:allow-write-file",
+    "fs:allow-write-text-file",
+    "fs:allow-read-file",
+    "fs:allow-stat",
+    "fs:allow-rename",
+    "fs:allow-remove",
+    "fs:allow-copy-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$LOCALAPPDATA/**" }
+      ]
+    }
+  ]
+}
