@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import type { AIProvider } from '@/types'
 import { aiService } from '@/services/ai-provider/aiService'
 
@@ -25,7 +26,7 @@ export async function reviewDocument(
 ): Promise<ReviewSuggestion[]> {
   // Strip HTML for analysis
   const div = document.createElement('div')
-  div.innerHTML = html
+  div.innerHTML = DOMPurify.sanitize(html)
   const text = div.textContent || ''
 
   if (!text.trim() || text.trim().length < 5) return []

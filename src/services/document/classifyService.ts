@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import type { FolderCategory, Folder, FileType, LearnedRule } from '@/types'
 import { FOLDER_CATEGORY_LABELS } from '@/types'
 import { generateId } from '@/utils/id'
@@ -24,7 +25,7 @@ export function invalidateLearnedRulesCache(): void {
 /** Extract plain text from HTML content */
 export function htmlToPlainText(html: string): string {
   const div = document.createElement('div')
-  div.innerHTML = html
+  div.innerHTML = DOMPurify.sanitize(html)
   return (div.textContent || div.innerText || '').slice(0, 2000)
 }
 

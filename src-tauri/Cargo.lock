@@ -753,7 +753,7 @@ dependencies = [
 
 [[package]]
 name = "documind"
-version = "0.5.5"
+version = "0.5.7"
 dependencies = [
  "keyring",
  "serde",

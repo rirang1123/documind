@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import DOMPurify from 'dompurify'
 import {
   FileEdit,
   Trash2,
@@ -47,7 +48,7 @@ export function DraftsView() {
 
   const getPreviewText = (html: string) => {
     const div = document.createElement('div')
-    div.innerHTML = html
+    div.innerHTML = DOMPurify.sanitize(html)
     const text = div.textContent || ''
     return text.slice(0, 120) + (text.length > 120 ? '...' : '')
   }

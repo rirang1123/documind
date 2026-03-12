@@ -28,8 +28,7 @@
         { "path": "$DOWNLOAD/**" },
         { "path": "$APPDATA/**" },
         { "path": "$LOCALAPPDATA/**" },
-        { "path": "$TEMP/**" },
-        { "path": "**" }
+        { "path": "$TEMP/**" }
       ]
     }
   ]
