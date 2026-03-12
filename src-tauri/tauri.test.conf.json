@@ -28,6 +28,7 @@
     }
   },
   "bundle": {
+    "createUpdaterArtifacts": "v1Compatible",
     "windows": {
       "nsis": {
         "displayLanguageSelector": true,
