@@ -18,7 +18,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVBOTFBNEU2NzAzMjlBOUMKUldTY21qSnc1cVNSV3Vha3JBTkRHS3FybE9Zc1BsZXNHcVNKZE1rYjN0UlpCaDdveW1VRVY0aFQK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI1RDlEOTk5OENGRTdERTAKUldUZ2ZmNk1tZG5aSmZsUU9uQnFKTUtEV1BkKzBrdWZiVTJLZFozWGdRUkhNMnNnS2lKbzdqSUIK",
       "endpoints": [
         "https://rirang1123.github.io/documind/latest-test.json"
       ],
