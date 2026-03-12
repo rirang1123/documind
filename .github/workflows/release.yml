@@ -36,118 +36,124 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build
 
-      - name: Create release and upload artifacts
+      - name: Create release, upload artifacts, and update Pages
+        uses: actions/github-script@v7
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          TAG="${{ github.ref_name }}"
-          VERSION="${TAG#v}"
-          BUNDLE_DIR="src-tauri/target/release/bundle"
+          TAG: ${{ github.ref_name }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { execSync } = require('child_process');
 
-          echo "=== Listing bundle directory ==="
-          find "$BUNDLE_DIR" -type f | head -30
+            const tag = process.env.TAG;
+            const version = tag.replace(/^v/, '');
+            const bundleDir = path.join(process.env.GITHUB_WORKSPACE, 'src-tauri', 'target', 'release', 'bundle');
 
-          echo ""
-          echo "=== Looking for .sig files ==="
-          SIG_FILES=$(find "$BUNDLE_DIR" -name "*.sig" -type f)
-          echo "$SIG_FILES"
-
-          if [ -z "$SIG_FILES" ]; then
-            echo "::error::No .sig files found"
-            exit 1
-          fi
-
-          # Find installer files
-          NSIS_EXE=$(find "$BUNDLE_DIR/nsis" -name "*-setup.exe" ! -name "*.sig" | head -1)
-          NSIS_SIG=$(find "$BUNDLE_DIR/nsis" -name "*-setup.exe.sig" | head -1)
-          MSI_FILE=$(find "$BUNDLE_DIR/msi" -name "*.msi" ! -name "*.sig" | head -1)
-
-          echo ""
-          echo "NSIS: $NSIS_EXE"
-          echo "NSIS sig: $NSIS_SIG"
-          echo "MSI: $MSI_FILE"
-
-          # Create GitHub release
-          gh release create "$TAG" \
-            --repo ${{ github.repository }} \
-            --title "DocuMind $TAG" \
-            --notes "DocuMind $TAG release" \
-            --latest
-
-          # Upload installers
-          [ -f "$NSIS_EXE" ] && gh release upload "$TAG" "$NSIS_EXE" --repo ${{ github.repository }}
-          [ -f "$MSI_FILE" ] && gh release upload "$TAG" "$MSI_FILE" --repo ${{ github.repository }}
-
-          # Upload .sig files
-          for sig in $SIG_FILES; do
-            echo "Uploading $(basename $sig)..."
-            gh release upload "$TAG" "$sig" --repo ${{ github.repository }}
-          done
-
-          # Read NSIS signature
-          NSIS_SIG_CONTENT=""
-          if [ -f "$NSIS_SIG" ]; then
-            NSIS_SIG_CONTENT=$(cat "$NSIS_SIG" | tr -d '\n\r')
-          fi
-
-          # Get download URL for NSIS installer
-          NSIS_NAME=$(basename "$NSIS_EXE")
-          NSIS_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/${NSIS_NAME}"
-
-          # Generate latest.json
-          NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-          cat > latest.json << ENDJSON
-          {
-            "version": "${VERSION}",
-            "notes": "DocuMind ${TAG} release",
-            "pub_date": "${NOW}",
-            "platforms": {
-              "windows-x86_64": {
-                "signature": "${NSIS_SIG_CONTENT}",
-                "url": "${NSIS_URL}"
-              }
+            // Find files recursively
+            function findFiles(dir, pattern) {
+              const results = [];
+              try {
+                const items = fs.readdirSync(dir, { withFileTypes: true });
+                for (const item of items) {
+                  const fullPath = path.join(dir, item.name);
+                  if (item.isDirectory()) {
+                    results.push(...findFiles(fullPath, pattern));
+                  } else if (pattern.test(item.name)) {
+                    results.push(fullPath);
+                  }
+                }
+              } catch {}
+              return results;
             }
-          }
-          ENDJSON
 
-          echo ""
-          echo "=== latest.json ==="
-          cat latest.json
+            const sigFiles = findFiles(bundleDir, /\.sig$/);
+            core.info(`Found .sig files: ${JSON.stringify(sigFiles.map(f => path.basename(f)))}`);
 
-          gh release upload "$TAG" latest.json --repo ${{ github.repository }}
+            if (sigFiles.length === 0) {
+              core.setFailed('No .sig files found');
+              return;
+            }
 
-  update-manifest:
-    needs: build-and-release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Copy latest.json to updater-manifest release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ github.ref_name }}"
+            const nsisExe = findFiles(path.join(bundleDir, 'nsis'), /setup\.exe$/)[0];
+            const nsisSig = findFiles(path.join(bundleDir, 'nsis'), /setup\.exe\.sig$/)[0];
+            const msiFile = findFiles(path.join(bundleDir, 'msi'), /\.msi$/)[0];
 
-          # Download latest.json from the version release
-          gh release download "$TAG" --repo ${{ github.repository }} --pattern "latest.json" --output latest.json
+            core.info(`NSIS: ${nsisExe}`);
+            core.info(`NSIS sig: ${nsisSig}`);
+            core.info(`MSI: ${msiFile}`);
 
-          echo "Downloaded latest.json:"
-          cat latest.json
+            // 1. Create release
+            const { data: release } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `DocuMind ${tag}`,
+              body: `DocuMind ${tag} release`,
+              draft: false,
+              prerelease: false,
+              make_latest: 'true',
+            });
+            core.info(`Created release: ${release.html_url}`);
 
-          # Check if updater-manifest release exists
-          if gh release view updater-manifest --repo ${{ github.repository }} > /dev/null 2>&1; then
-            echo "updater-manifest release exists, uploading..."
-          else
-            echo "Creating updater-manifest release..."
-            gh release create updater-manifest --repo ${{ github.repository }} \
-              --title "Updater Manifests" \
-              --notes "Auto-updated manifests for in-app updater. Do not delete." \
-              --latest=false
-          fi
+            // 2. Upload assets
+            async function uploadAsset(filePath) {
+              const name = path.basename(filePath);
+              const data = fs.readFileSync(filePath);
+              core.info(`Uploading ${name} (${data.length} bytes)...`);
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+                name,
+                data,
+              });
+            }
 
-          # Upload latest.json (--clobber replaces existing)
-          gh release upload updater-manifest latest.json --repo ${{ github.repository }} --clobber
+            if (nsisExe) await uploadAsset(nsisExe);
+            if (msiFile) await uploadAsset(msiFile);
+            for (const sig of sigFiles) await uploadAsset(sig);
 
-          echo "Successfully uploaded latest.json to updater-manifest release"
+            // 3. Generate latest.json
+            const sigContent = fs.readFileSync(nsisSig, 'utf-8').trim();
+            const nsisName = path.basename(nsisExe);
+            const nsisUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/download/${tag}/${nsisName}`;
+            const now = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+            const latestJson = JSON.stringify({
+              version,
+              notes: `DocuMind ${tag} release`,
+              pub_date: now,
+              platforms: {
+                'windows-x86_64': {
+                  signature: sigContent,
+                  url: nsisUrl,
+                },
+              },
+            }, null, 2);
+
+            core.info(`latest.json:\n${latestJson}`);
+
+            // 4. Update latest.json on gh-pages branch
+            let existingSha = null;
+            try {
+              const { data: existing } = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: 'latest.json',
+                ref: 'gh-pages',
+              });
+              existingSha = existing.sha;
+            } catch {}
+
+            await github.rest.repos.createOrUpdateFileContents({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              path: 'latest.json',
+              message: `update latest.json for ${tag}`,
+              content: Buffer.from(latestJson).toString('base64'),
+              branch: 'gh-pages',
+              ...(existingSha ? { sha: existingSha } : {}),
+            });
+
+            core.info('Updated latest.json on gh-pages');

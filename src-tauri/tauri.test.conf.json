@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegui/tauri-v2/refs/heads/main/core/tauri-config-schema/schema.json",
   "productName": "DocuMind-Test",
-  "version": "0.5.901",
+  "version": "0.6.1",
   "identifier": "com.documind.test",
   "app": {
     "windows": [
@@ -20,7 +20,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVBOTFBNEU2NzAzMjlBOUMKUldTY21qSnc1cVNSV3Vha3JBTkRHS3FybE9Zc1BsZXNHcVNKZE1rYjN0UlpCaDdveW1VRVY0aFQK",
       "endpoints": [
-        "https://github.com/rirang1123/documind/releases/download/updater-manifest/latest-test.json"
+        "https://rirang1123.github.io/documind/latest-test.json"
       ],
       "windows": {
         "installMode": "passive"
