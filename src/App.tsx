@@ -6,6 +6,7 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { migrateApiKeysToKeychain } from '@/services/db'
 import { validateAndRepairProjectPaths } from '@/services/dataIntegrity'
 import { InitialSetup } from '@/components/setup/InitialSetup'
+import { UpdateChecker } from '@/components/layout/UpdateChecker'
 
 export default function App() {
   const { loadSettings, loadProjects, loadDrafts } = useAppStore()
@@ -83,6 +84,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <MainLayout />
+      <UpdateChecker />
     </ErrorBoundary>
   )
 }
