@@ -48,7 +48,7 @@ jobs:
           workspaces: src-tauri
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build Tauri app (test config)
         uses: tauri-apps/tauri-action@v0
@@ -135,7 +135,7 @@ jobs:
               const { data: mainRef } = await github.rest.git.getRef({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                ref: 'heads/main',
+                ref: 'heads/master',
               })
               try {
                 await github.rest.git.createRef({
