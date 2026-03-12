@@ -33,8 +33,17 @@ jobs:
       - name: Build Tauri app (test config)
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         run: npm run tauri -- build --config src-tauri/tauri.test.conf.json
+
+      - name: Debug - List bundle files
+        if: always()
+        run: |
+          echo "=== Bundle directory contents ==="
+          Get-ChildItem -Path "src-tauri\target\release\bundle" -Recurse -File | Select-Object FullName, Length | Format-Table -AutoSize
+          echo "=== Looking for .sig files ==="
+          Get-ChildItem -Path "src-tauri\target\release\bundle" -Recurse -Filter "*.sig" | Select-Object FullName
+        shell: pwsh
 
       - name: Create release, upload artifacts, and update Pages
         uses: actions/github-script@v7
@@ -64,6 +73,10 @@ jobs:
               } catch {}
               return results;
             }
+
+            // Debug: list all files in bundle dir
+            const allFiles = findFiles(bundleDir, /.*/);
+            core.info(`All bundle files:\n${allFiles.map(f => `  ${f}`).join('\n')}`);
 
             const sigFiles = findFiles(bundleDir, /\.sig$/);
             core.info(`Found .sig files: ${JSON.stringify(sigFiles.map(f => path.basename(f)))}`);
