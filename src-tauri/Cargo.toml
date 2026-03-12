@@ -1,6 +1,6 @@
 [package]
 name = "documind"
-version = "0.5.7"
+version = "0.5.8"
 description = "AI Document Management Desktop App"
 authors = ["DocuMind"]
 edition = "2021"

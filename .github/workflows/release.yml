@@ -31,6 +31,7 @@ jobs:
         run: npm install
 
       - name: Build and release
+        id: tauri-build
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -41,7 +42,79 @@ jobs:
           releaseName: DocuMind ${{ github.ref_name }}
           releaseDraft: false
           prerelease: false
-          includeUpdaterJson: true
+          includeUpdaterJson: false
+
+      - name: Upload signatures and generate latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v', ''
+          $bundleDir = "src-tauri/target/release/bundle"
+
+          # Find all .sig files
+          $sigFiles = Get-ChildItem -Path $bundleDir -Recurse -Filter "*.sig"
+          Write-Host "Found signature files:"
+          $sigFiles | ForEach-Object { Write-Host "  $_" }
+
+          if ($sigFiles.Count -eq 0) {
+            Write-Host "::error::No .sig files found. Signing may have failed."
+            exit 1
+          }
+
+          # Upload .sig files to the release
+          foreach ($sig in $sigFiles) {
+            Write-Host "Uploading $($sig.Name)..."
+            gh release upload $tag $sig.FullName --repo ${{ github.repository }} --clobber
+          }
+
+          # Read signature content for NSIS installer
+          $nsisSetupSig = $sigFiles | Where-Object { $_.Name -match "setup\.exe\.sig$" } | Select-Object -First 1
+          $nsisSig = ""
+          if ($nsisSetupSig) {
+            $nsisSig = Get-Content $nsisSetupSig.FullName -Raw
+            $nsisSig = $nsisSig.Trim()
+          }
+
+          # Read signature content for MSI installer
+          $msiSig = ""
+          $msiSigFile = $sigFiles | Where-Object { $_.Name -match "\.msi\.sig$" -and $_.Name -notmatch "\.zip\.sig$" } | Select-Object -First 1
+          if ($msiSigFile) {
+            $msiSig = Get-Content $msiSigFile.FullName -Raw
+            $msiSig = $msiSig.Trim()
+          }
+
+          # Get download URLs from release assets
+          $releaseJson = gh release view $tag --repo ${{ github.repository }} --json assets | ConvertFrom-Json
+          $nsisUrl = ($releaseJson.assets | Where-Object { $_.name -match "setup\.exe$" }).url
+          $msiUrl = ($releaseJson.assets | Where-Object { $_.name -match "\.msi$" -and $_.name -notmatch "\.sig$" }).url
+
+          # Build latest.json
+          $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+          $platforms = @{}
+
+          if ($nsisUrl -and $nsisSig) {
+            $platforms["windows-x86_64"] = @{
+              signature = $nsisSig
+              url = $nsisUrl
+            }
+          }
+
+          $latestJson = @{
+            version = $version
+            notes = "DocuMind $tag release"
+            pub_date = $now
+            platforms = $platforms
+          } | ConvertTo-Json -Depth 4
+
+          Write-Host "latest.json content:"
+          Write-Host $latestJson
+
+          # Save and upload latest.json to this release
+          $latestJson | Out-File -FilePath "latest.json" -Encoding utf8NoBOM
+          gh release upload $tag "latest.json" --repo ${{ github.repository }} --clobber
 
   update-manifest:
     needs: build-and-release
@@ -50,82 +123,29 @@ jobs:
       contents: write
     steps:
       - name: Copy latest.json to updater-manifest release
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const tag = '${{ github.ref_name }}'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
 
-            // 1. Find the release created by tauri-action
-            const { data: releases } = await github.rest.repos.listReleases({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 10,
-            })
-            const thisRelease = releases.find(r => r.tag_name === tag)
-            if (!thisRelease) {
-              core.setFailed(`Release for tag ${tag} not found`)
-              return
-            }
+          # Download latest.json from the version release
+          gh release download "$TAG" --repo ${{ github.repository }} --pattern "latest.json" --output latest.json
 
-            // 2. Download latest.json from the release
-            const latestAsset = thisRelease.assets.find(a => a.name === 'latest.json')
-            if (!latestAsset) {
-              core.setFailed('latest.json not found in release assets')
-              return
-            }
+          echo "Downloaded latest.json:"
+          cat latest.json
 
-            const resp = await github.request('GET ' + latestAsset.url, {
-              headers: { Accept: 'application/octet-stream' }
-            })
-            const latestJson = Buffer.from(resp.data).toString('utf-8')
-            core.info(`latest.json content: ${latestJson}`)
+          # Check if updater-manifest release exists
+          if gh release view updater-manifest --repo ${{ github.repository }} > /dev/null 2>&1; then
+            echo "updater-manifest release exists, uploading..."
+          else
+            echo "Creating updater-manifest release..."
+            gh release create updater-manifest --repo ${{ github.repository }} \
+              --title "Updater Manifests" \
+              --notes "Auto-updated manifests for in-app updater. Do not delete." \
+              --latest=false
+          fi
 
-            // 3. Find or create "updater-manifest" release
-            let manifestRelease = releases.find(r => r.tag_name === 'updater-manifest')
+          # Upload latest.json (--clobber replaces existing)
+          gh release upload updater-manifest latest.json --repo ${{ github.repository }} --clobber
 
-            if (!manifestRelease) {
-              const { data: masterRef } = await github.rest.git.getRef({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                ref: 'heads/master',
-              })
-              try {
-                await github.rest.git.createRef({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  ref: 'refs/tags/updater-manifest',
-                  sha: masterRef.object.sha,
-                })
-              } catch { /* tag may exist */ }
-
-              const { data: created } = await github.rest.repos.createRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                tag_name: 'updater-manifest',
-                name: 'Updater Manifests',
-                body: 'Auto-updated manifests for in-app updater. Do not delete.',
-                draft: false,
-                prerelease: false,
-              })
-              manifestRelease = created
-            }
-
-            // 4. Upload latest.json (replace if exists)
-            const existing = manifestRelease.assets?.find(a => a.name === 'latest.json')
-            if (existing) {
-              await github.rest.repos.deleteReleaseAsset({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                asset_id: existing.id,
-              })
-            }
-
-            await github.rest.repos.uploadReleaseAsset({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: manifestRelease.id,
-              name: 'latest.json',
-              data: latestJson,
-            })
-
-            core.info(`Uploaded latest.json to updater-manifest release`)
+          echo "Successfully uploaded latest.json to updater-manifest release"
