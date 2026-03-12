@@ -5,12 +5,14 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { migrateApiKeysToKeychain } from '@/services/db'
 import { validateAndRepairProjectPaths } from '@/services/dataIntegrity'
+import { InitialSetup } from '@/components/setup/InitialSetup'
 
 export default function App() {
   const { loadSettings, loadProjects, loadDrafts } = useAppStore()
   const settings = useAppStore((s) => s.settings)
   useKeyboardShortcuts()
   const [initError, setInitError] = useState<string | null>(null)
+  const [initDone, setInitDone] = useState(false)
 
   const initialize = useCallback(async () => {
     try {
@@ -21,6 +23,7 @@ export default function App() {
       await validateAndRepairProjectPaths() // 프로젝트 경로 유효성 검증 + 복구
       await loadProjects()
       await loadDrafts()
+      setInitDone(true)
     } catch (error) {
       console.error('Initialization failed:', error)
       setInitError(error instanceof Error ? error.message : '초기화 중 알 수 없는 오류가 발생했습니다.')
@@ -66,6 +69,14 @@ export default function App() {
           </button>
         </div>
       </div>
+    )
+  }
+
+  if (initDone && !settings?.storagePath) {
+    return (
+      <ErrorBoundary>
+        <InitialSetup onComplete={initialize} />
+      </ErrorBoundary>
     )
   }
 
